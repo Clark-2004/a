@@ -1,6 +1,4 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
-import json
+import streamlit as st
 import random
 
 # ─────────────────────────────────────────────
@@ -345,276 +343,249 @@ WRONG    = "#F96167"
 GOLD     = "#FFD700"
 FONT     = "Segoe UI"
 
+# ─────────────────────────────────────────────
+#  INITIALIZE SESSION STATE
+# ─────────────────────────────────────────────
+def init_session_state():
+    if "page" not in st.session_state:
+        st.session_state.page = "home"
+    if "selected_lesson" not in st.session_state:
+        st.session_state.selected_lesson = list(LESSONS.keys())[0]
+    if "shuffle" not in st.session_state:
+        st.session_state.shuffle = True
+    if "questions" not in st.session_state:
+        st.session_state.questions = []
+    if "q_index" not in st.session_state:
+        st.session_state.q_index = 0
+    if "score" not in st.session_state:
+        st.session_state.score = 0
+    if "selected_answer" not in st.session_state:
+        st.session_state.selected_answer = None
+    if "answered" not in st.session_state:
+        st.session_state.answered = False
 
 # ─────────────────────────────────────────────
-#  APP
+#  PAGE: HOME
 # ─────────────────────────────────────────────
-class QuizApp(tk.Tk):
-    def __init__(self):
-        super().__init__()
-        self.title("CSPC-11 Programming Languages Quiz")
-        self.geometry("820x620")
-        self.resizable(False, False)
-        self.configure(bg=BG)
+def show_home():
+    st.markdown(f"""
+    <div style='text-align: center; padding: 40px;'>
+        <h1 style='color: {ACC};'>🎓 CSPC-11 Quiz Game</h1>
+        <p style='font-size: 18px; color: {SUBTEXT};'>Welcome to the Quiz!</p>
+        <p style='color: {SUBTEXT};'>Select a lesson and test your knowledge.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.divider()
+    
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        lesson = st.selectbox(
+            "Choose a Lesson:",
+            options=list(LESSONS.keys()),
+            index=list(LESSONS.keys()).index(st.session_state.selected_lesson),
+            key="lesson_select"
+        )
+        st.session_state.selected_lesson = lesson
+    
+    shuffle = st.checkbox("Shuffle questions", value=True)
+    st.session_state.shuffle = shuffle
+    
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        if st.button("▶ Start Quiz", use_container_width=True, type="primary"):
+            st.session_state.page = "quiz"
+            st.session_state.questions = list(LESSONS[st.session_state.selected_lesson])
+            if st.session_state.shuffle:
+                random.shuffle(st.session_state.questions)
+            st.session_state.q_index = 0
+            st.session_state.score = 0
+            st.session_state.answered = False
+            st.rerun()
+    
+    st.markdown(f"""
+    <div style='text-align: center; color: {SUBTEXT}; margin-top: 40px;'>
+        <p>10 questions per lesson  •  Instant feedback  •  Final score</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-        self.lesson_names   = list(LESSONS.keys())
-        self.selected_lesson = tk.StringVar(value=self.lesson_names[0])
-
-        # runtime state
-        self.questions   = []
-        self.q_index     = 0
-        self.score       = 0
-        self.answered    = False
-        self.choice_var  = tk.IntVar()
-
-        self._build_ui()
-        self._show_home()
-
-    # ── UI BUILD ─────────────────────────────
-    def _build_ui(self):
-        # ── HEADER ──
-        hdr = tk.Frame(self, bg=ACC, height=60)
-        hdr.pack(fill="x")
-        tk.Label(hdr, text="🎓  CSPC-11 Quiz Game", bg=ACC, fg="white",
-                 font=(FONT, 18, "bold")).pack(side="left", padx=20, pady=10)
-
-        # ── MAIN CANVAS (card area) ──
-        self.main_frame = tk.Frame(self, bg=BG)
-        self.main_frame.pack(fill="both", expand=True, padx=30, pady=20)
-
-    def _clear(self):
-        for w in self.main_frame.winfo_children():
-            w.destroy()
-
-    # ── HOME ─────────────────────────────────
-    def _show_home(self):
-        self._clear()
-        card = tk.Frame(self.main_frame, bg=CARD, bd=0, relief="flat")
-        card.place(relx=0.5, rely=0.5, anchor="center", width=620, height=460)
-
-        tk.Label(card, text="Welcome to the Quiz!", bg=CARD, fg=BG,
-                 font=(FONT, 22, "bold")).pack(pady=(30, 5))
-        tk.Label(card, text="Select a lesson and test your knowledge.",
-                 bg=CARD, fg=SUBTEXT, font=(FONT, 12)).pack()
-
-        tk.Frame(card, bg=ACC, height=3).pack(fill="x", padx=40, pady=15)
-
-        tk.Label(card, text="Choose a Lesson:", bg=CARD, fg=TEXT,
-                 font=(FONT, 12, "bold")).pack(anchor="w", padx=40)
-
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure("TCombobox", fieldbackground=CARD, background=CARD,
-                        foreground=TEXT, font=(FONT, 11))
-
-        combo = ttk.Combobox(card, textvariable=self.selected_lesson,
-                             values=self.lesson_names,
-                             state="readonly", width=54, font=(FONT, 11))
-        combo.pack(padx=40, pady=(5, 25))
-
-        # shuffle option
-        self.shuffle_var = tk.BooleanVar(value=True)
-        tk.Checkbutton(card, text="Shuffle questions", variable=self.shuffle_var,
-                       bg=CARD, fg=TEXT, font=(FONT, 11),
-                       activebackground=CARD, selectcolor=CARD).pack()
-
-        tk.Button(card, text="▶  Start Quiz", bg=BTN_BG, fg=BTN_FG,
-                  font=(FONT, 13, "bold"), relief="flat", cursor="hand2",
-                  padx=30, pady=10, command=self._start_quiz).pack(pady=25)
-
-        tk.Label(card, text="10 questions per lesson  •  Instant feedback  •  Final score",
-                 bg=CARD, fg=SUBTEXT, font=(FONT, 9)).pack()
-
-    # ── START QUIZ ───────────────────────────
-    def _start_quiz(self):
-        lesson = self.selected_lesson.get()
-        self.questions = list(LESSONS[lesson])
-        if self.shuffle_var.get():
-            random.shuffle(self.questions)
-        self.q_index = 0
-        self.score   = 0
-        self._show_question()
-
-    # ── QUESTION SCREEN ──────────────────────
-    def _show_question(self):
-        self._clear()
-        q_data = self.questions[self.q_index]
-        total  = len(self.questions)
-
-        # progress bar background
-        prog_bg = tk.Frame(self.main_frame, bg="#CADCFC", height=8)
-        prog_bg.pack(fill="x", pady=(0, 12))
-        pct = (self.q_index / total)
-        prog_fill = tk.Frame(prog_bg, bg=ACC, height=8)
-        prog_fill.place(relwidth=pct, relheight=1)
-
-        # question card
-        card = tk.Frame(self.main_frame, bg=CARD, bd=0)
-        card.pack(fill="both", expand=True)
-
-        # top bar
-        top = tk.Frame(card, bg=BTN_BG)
-        top.pack(fill="x")
-        tk.Label(top, text=f"Question {self.q_index+1} / {total}",
-                 bg=BTN_BG, fg="white", font=(FONT, 11, "bold"),
-                 padx=20, pady=8).pack(side="left")
-        lname = self.selected_lesson.get()
-        tk.Label(top, text=lname, bg=BTN_BG, fg="#CADCFC",
-                 font=(FONT, 10), padx=20).pack(side="right", pady=8)
-
-        # question text
-        q_frame = tk.Frame(card, bg=CARD)
-        q_frame.pack(fill="x", padx=30, pady=(20, 5))
-        tk.Label(q_frame, text=q_data["q"], bg=CARD, fg=TEXT,
-                 font=(FONT, 13, "bold"), wraplength=700,
-                 justify="left").pack(anchor="w")
-
-        tk.Frame(card, bg="#DDDDDD", height=1).pack(fill="x", padx=30, pady=8)
-
-        # choices
-        self.choice_var.set(-1)
-        self.answered = False
-        self.choice_btns = []
-
-        choices = q_data["choices"]
-        labels = ["A", "B", "C", "D"]
-
-        choices_frame = tk.Frame(card, bg=CARD)
-        choices_frame.pack(fill="x", padx=25, pady=5)
-
-        for i, (lbl, txt) in enumerate(zip(labels, choices)):
-            row = tk.Frame(choices_frame, bg=CARD, cursor="hand2")
-            row.pack(fill="x", pady=5)
-
-            indicator = tk.Label(row, text=lbl, bg="#CADCFC", fg=BTN_BG,
-                                 font=(FONT, 11, "bold"), width=3, height=2)
-            indicator.pack(side="left", padx=(5, 10))
-
-            text_lbl = tk.Label(row, text=txt, bg=CARD, fg=TEXT,
-                                font=(FONT, 11), wraplength=580,
-                                justify="left", anchor="w")
-            text_lbl.pack(side="left", fill="x", expand=True)
-
-            for widget in (row, indicator, text_lbl):
-                widget.bind("<Button-1>", lambda e, idx=i: self._select(idx))
-
-            self.choice_btns.append((row, indicator, text_lbl))
-
-        # bottom: feedback + next
-        self.bottom_frame = tk.Frame(card, bg=CARD)
-        self.bottom_frame.pack(fill="x", padx=30, pady=(10, 20))
-
-        self.feedback_lbl = tk.Label(self.bottom_frame, text="", bg=CARD,
-                                     font=(FONT, 12, "bold"))
-        self.feedback_lbl.pack(side="left", expand=True)
-
-        self.next_btn = tk.Button(self.bottom_frame,
-                                  text="Next  ▶",
-                                  bg=BTN_BG, fg=BTN_FG,
-                                  font=(FONT, 11, "bold"),
-                                  relief="flat", cursor="hand2",
-                                  padx=20, pady=8,
-                                  command=self._next_question,
-                                  state="disabled")
-        self.next_btn.pack(side="right")
-
-        # score label top right
-        self.score_lbl = tk.Label(self.main_frame,
-                                  text=f"Score: {self.score}/{self.q_index}",
-                                  bg=BG, fg="white", font=(FONT, 10, "bold"))
-        self.score_lbl.place(relx=1.0, y=-38, anchor="ne")
-
-    # ── SELECT ANSWER ────────────────────────
-    def _select(self, idx):
-        if self.answered:
-            return
-        self.answered = True
-        correct = self.questions[self.q_index]["a"]
-
-        for i, (row, ind, txt) in enumerate(self.choice_btns):
-            if i == correct:
-                ind.config(bg=CORRECT, fg="white")
-                row.config(bg="#E8FAF0")
-                txt.config(bg="#E8FAF0")
-            elif i == idx and idx != correct:
-                ind.config(bg=WRONG, fg="white")
-                row.config(bg="#FFF0F0")
-                txt.config(bg="#FFF0F0")
-
-        if idx == correct:
-            self.score += 1
-            self.feedback_lbl.config(text="✅  Correct!", fg=CORRECT)
+# ─────────────────────────────────────────────
+#  PAGE: QUIZ
+# ─────────────────────────────────────────────
+def show_question():
+    total = len(st.session_state.questions)
+    q_data = st.session_state.questions[st.session_state.q_index]
+    
+    # Progress bar
+    progress_pct = (st.session_state.q_index / total)
+    st.progress(progress_pct)
+    
+    # Header info
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col1:
+        st.markdown(f"**Q {st.session_state.q_index + 1}/{total}**")
+    with col3:
+        st.markdown(f"**Score: {st.session_state.score}/{st.session_state.q_index}**")
+    
+    st.markdown(f"<p style='color: {SUBTEXT};'>{st.session_state.selected_lesson}</p>", unsafe_allow_html=True)
+    st.divider()
+    
+    # Question
+    st.markdown(f"<h3 style='color: {TEXT};'>{q_data['q']}</h3>", unsafe_allow_html=True)
+    st.divider()
+    
+    # Choices
+    labels = ["A", "B", "C", "D"]
+    correct_idx = q_data["a"]
+    
+    for i, (lbl, choice_text) in enumerate(zip(labels, q_data["choices"])):
+        if st.session_state.answered:
+            # Show correct/wrong feedback
+            if i == correct_idx:
+                col_color = CORRECT
+                emoji = "✅"
+            elif i == st.session_state.selected_answer and i != correct_idx:
+                col_color = WRONG
+                emoji = "❌"
+            else:
+                col_color = TEXT
+                emoji = ""
+            
+            st.markdown(f"""
+            <div style='
+                background-color: {("white" if col_color == TEXT else ("lightgreen" if col_color == CORRECT else "lightcoral"))};
+                border-left: 4px solid {col_color};
+                padding: 15px;
+                margin: 10px 0;
+                border-radius: 5px;
+            '>
+                <b>{lbl}. {choice_text}</b> {emoji}
+            </div>
+            """, unsafe_allow_html=True)
         else:
-            self.feedback_lbl.config(
-                text=f"❌  Wrong! Answer: {['A','B','C','D'][correct]}", fg=WRONG)
-
-        self.next_btn.config(state="normal")
-        self.score_lbl.config(text=f"Score: {self.score}/{self.q_index+1}")
-
-    # ── NEXT ─────────────────────────────────
-    def _next_question(self):
-        self.q_index += 1
-        if self.q_index < len(self.questions):
-            self._show_question()
-        else:
-            self._show_results()
-
-    # ── RESULTS ──────────────────────────────
-    def _show_results(self):
-        self._clear()
-        total = len(self.questions)
-        pct   = (self.score / total) * 100
-
-        if pct == 100:
-            emoji, msg, col = "🏆", "PERFECT SCORE!", GOLD
-        elif pct >= 80:
-            emoji, msg, col = "🎉", "Excellent Work!", CORRECT
-        elif pct >= 60:
-            emoji, msg, col = "👍", "Good Job!", "#5B9BD5"
-        else:
-            emoji, msg, col = "📚", "Keep Studying!", WRONG
-
-        card = tk.Frame(self.main_frame, bg=CARD)
-        card.place(relx=0.5, rely=0.5, anchor="center", width=620, height=460)
-
-        tk.Label(card, text=emoji, bg=CARD, font=(FONT, 48)).pack(pady=(30, 5))
-        tk.Label(card, text=msg, bg=CARD, fg=col,
-                 font=(FONT, 22, "bold")).pack()
-
-        tk.Label(card, text=f"You scored  {self.score} / {total}",
-                 bg=CARD, fg=TEXT, font=(FONT, 16)).pack(pady=10)
-
-        # score bar
-        bar_bg = tk.Frame(card, bg="#EEEEEE", height=18)
-        bar_bg.pack(fill="x", padx=60, pady=5)
-        bar_bg.update_idletasks()
-        fill_w = int((self.score / total) * bar_bg.winfo_width())
-        tk.Frame(bar_bg, bg=col, height=18, width=fill_w).place(x=0, y=0)
-
-        tk.Label(card, text=f"{pct:.0f}%", bg=CARD, fg=SUBTEXT,
-                 font=(FONT, 11)).pack()
-
-        tk.Frame(card, bg="#DDDDDD", height=1).pack(fill="x", padx=60, pady=15)
-
-        lesson = self.selected_lesson.get()
-        tk.Label(card, text=f"Lesson: {lesson}", bg=CARD, fg=SUBTEXT,
-                 font=(FONT, 10), wraplength=500).pack()
-
-        btn_frame = tk.Frame(card, bg=CARD)
-        btn_frame.pack(pady=20)
-
-        tk.Button(btn_frame, text="🔄  Retry", bg=ACC, fg="white",
-                  font=(FONT, 11, "bold"), relief="flat", cursor="hand2",
-                  padx=20, pady=8, command=self._start_quiz).pack(side="left", padx=10)
-
-        tk.Button(btn_frame, text="🏠  Home", bg=BTN_BG, fg=BTN_FG,
-                  font=(FONT, 11, "bold"), relief="flat", cursor="hand2",
-                  padx=20, pady=8, command=self._show_home).pack(side="left", padx=10)
-
+            if st.button(f"**{lbl}.** {choice_text}", key=f"choice_{i}", use_container_width=True):
+                st.session_state.selected_answer = i
+                st.session_state.answered = True
+                if i == correct_idx:
+                    st.session_state.score += 1
+                st.rerun()
+    
+    # Feedback
+    if st.session_state.answered:
+        st.divider()
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.session_state.selected_answer == correct_idx:
+                st.success("✅ Correct!")
+            else:
+                st.error(f"❌ Wrong! Answer: {labels[correct_idx]}")
+        
+        with col2:
+            if st.button("Next ▶", use_container_width=True, key="next_btn"):
+                st.session_state.q_index += 1
+                if st.session_state.q_index < len(st.session_state.questions):
+                    st.session_state.answered = False
+                    st.session_state.selected_answer = None
+                    st.rerun()
+                else:
+                    st.session_state.page = "results"
+                    st.rerun()
 
 # ─────────────────────────────────────────────
-#  MAIN
+#  PAGE: RESULTS
 # ─────────────────────────────────────────────
+def show_results():
+    total = len(st.session_state.questions)
+    score = st.session_state.score
+    pct = (score / total) * 100
+    
+    if pct == 100:
+        emoji, msg, col = "🏆", "PERFECT SCORE!", GOLD
+    elif pct >= 80:
+        emoji, msg, col = "🎉", "Excellent Work!", CORRECT
+    elif pct >= 60:
+        emoji, msg, col = "👍", "Good Job!", "#5B9BD5"
+    else:
+        emoji, msg, col = "📚", "Keep Studying!", WRONG
+    
+    st.markdown(f"""
+    <div style='text-align: center; padding: 40px;'>
+        <h1>{emoji}</h1>
+        <h2 style='color: {col};'>{msg}</h2>
+        <h3>You scored <span style='color: {col};'>{score} / {total}</span></h3>
+        <h4 style='color: {SUBTEXT};'>{pct:.0f}%</h4>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Progress bar for visual representation
+    st.progress(score / total)
+    
+    st.divider()
+    
+    st.markdown(f"**Lesson:** {st.session_state.selected_lesson}")
+    
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col1:
+        if st.button("🔄 Retry", use_container_width=True):
+            st.session_state.page = "quiz"
+            st.session_state.questions = list(LESSONS[st.session_state.selected_lesson])
+            if st.session_state.shuffle:
+                random.shuffle(st.session_state.questions)
+            st.session_state.q_index = 0
+            st.session_state.score = 0
+            st.session_state.answered = False
+            st.rerun()
+    
+    with col3:
+        if st.button("🏠 Home", use_container_width=True):
+            st.session_state.page = "home"
+            st.rerun()
+
+# ─────────────────────────────────────────────
+#  MAIN APP
+# ─────────────────────────────────────────────
+def main():
+    st.set_page_config(
+        page_title="CSPC-11 Quiz Game",
+        page_icon="🎓",
+        layout="wide",
+        initial_sidebar_state="collapsed"
+    )
+    
+    # Custom CSS
+    st.markdown(f"""
+    <style>
+        body {{
+            background-color: {BG};
+            color: {TEXT};
+        }}
+        .stButton > button {{
+            width: 100%;
+            background-color: {BTN_BG};
+            color: {BTN_FG};
+            border-radius: 5px;
+            border: none;
+            font-size: 16px;
+        }}
+    </style>
+    """, unsafe_allow_html=True)
+    
+    init_session_state()
+    
+    # Header
+    st.markdown(f"""
+    <div style='background-color: {ACC}; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
+        <h1 style='color: white; margin: 0;'>🎓 CSPC-11 Programming Languages Quiz</h1>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Page routing
+    if st.session_state.page == "home":
+        show_home()
+    elif st.session_state.page == "quiz":
+        show_question()
+    elif st.session_state.page == "results":
+        show_results()
+
 if __name__ == "__main__":
-    app = QuizApp()
-    app.mainloop()
+    main()
