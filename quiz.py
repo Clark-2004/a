@@ -78,7 +78,7 @@ LESSONS = {
         },
     ],
 
-    "Lesson 1B – Block Structure": [
+    "Lesson 1 – Block Structure": [
         {
             "q": "What is a block in programming?",
             "choices": [
